@@ -49,28 +49,31 @@
 			// ctx.stroke();
 			if(dist != 0) {
 				if(y < squares.length - 2) {
-					console.log('we\'re in');
+
 					if(squares[y+1][x] < squares[y][x]) {
 						console.log('first');
 						river(x, y+1, distToSink(x, y+1), depth-1);
 						flowed = true;
-					}	
-
-					if(x > 0) {
-						if(squares[y+1][x-1] < squares[y][x]) {
-							console.log('second');
-							river(x-1, y+1, distToSink(x-1, y+1), depth-1);
-							flowed = true;
+					}
+					if(!flowed) {
+						if(x > 0) {
+							if(squares[y+1][x-1] < squares[y][x]) {
+								console.log('second');
+								river(x-1, y+1, distToSink(x-1, y+1), depth-1);
+								flowed = true;
+							}
 						}
 					}	
-
-					if(x < squares[0].length - 1) {
-						if(squares[y+1][x+1] < squares[y][x]) {
-							console.log('third');
-							river(x+1, y+1, distToSink(x+1, y+1), depth-1);
-							flowed = true;
+					if(!flowed) {
+						if(x < squares[0].length - 1) {
+							if(squares[y+1][x+1] < squares[y][x]) {
+								console.log('third');
+								river(x+1, y+1, distToSink(x+1, y+1), depth-1);
+								flowed = true;
+							}
 						}
 					}
+
 
 					if(!flowed) {
 						river(x+1, y, distToSink(x+1, y), depth-1);
