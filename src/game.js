@@ -1,5 +1,5 @@
-var engine = require('./engine');
+var engine = require('./engine'),
+    map = require('./map');
 
-module.exports = function() {
-  
-};
+engine.loadTiles(map.random());
+

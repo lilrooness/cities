@@ -1,50 +1,3 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-
-module.exports = function() {
-  var canvas, ctx, map;
-  
-  function init() {
-    canvas = document.querySelector('#map');
-    ctx = canvas.getContext('2d');  
-  }
-  
-  window.addEventListener('load', init);
-}
-
-
-
-},{}],2:[function(require,module,exports){
-var engine = require('./engine'),
-    map = require('./map');
-
-engine.loadTiles(map.random());
-
-
-},{"./engine":1,"./map":3}],3:[function(require,module,exports){
-var noise = require('./noise');
-
-module.exports = function() {
-  var map;
-  
-  function random() { 
-    noise.seed(Math.random());
-     
-  }
-
-  function fill() {
-    map = [];
-    for(var x = 0; x < 100; x++) {
-      map[x] = [];
-      for(var y = 0; y < 100; y++) {
-        map[x][y] = noise.simplex2(x, y);
-      }
-    } 
-  }
-  
-  return map;
-}
-
-},{"./noise":4}],4:[function(require,module,exports){
 /*
  * A speed-improved perlin and simplex noise algorithms for 2D.
  *
@@ -357,5 +310,3 @@ module.exports = function() {
 })(this);
 
 module.exports = this.noise;
-
-},{}]},{},[2])
