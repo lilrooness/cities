@@ -29,20 +29,31 @@
 			x: x,
 			y: y,
 			age: 0,
+			hunger: 1000,
 			atWaypoint: false,
 
 			waypoint: {x: x, y: y},
 
 			update: function(time) {
-				var resouceIndex = closestResouce(x, y);
-				this.setWayPoint({x: game.resourcePoints[resouceIndex].x, y: game.resourcePoints[resouceIndex].y});
-				this.moveTo(waypoint);
-				if(this.atWaypoint) {
-					game.resourcePoints[resouceIndex].resource--;
-					if(game.resourcePoints[resouceIndex].resource == 0) {
-						this.atWaypoint = false;
-						game.resourcePoints.splice(resouceIndex, 1);
+
+				this.hunger --;
+
+				if(game.resourcePoints.length != 0) {
+					var resouceIndex = closestResouce(x, y);
+					this.setWayPoint({x: game.resourcePoints[resouceIndex].x, y: game.resourcePoints[resouceIndex].y});
+					this.moveTo(waypoint);
+
+					if(this.atWaypoint) {
+						game.resourcePoints[resouceIndex].resource--;
+						this.hunger ++;
+
+						if(game.resourcePoints[resouceIndex].resource < 1) {
+							this.atWaypoint = false;
+							game.resourcePoints.splice(resouceIndex, 1);
+						}
 					}
+				} else {
+					this.moveTo({x: Math.random() * width, y: Math.random() * height});
 				}
 			},
 
@@ -66,14 +77,29 @@
 
 	var Game = function() {
 		return {
+			time: 0,
 			fps: 60,
 			people: [],
 			numResources: 30,
 			resourcePoints: [],
 
 			tick: function() {
+				
+				this.time ++;
+
+				if(this.time % 50 == 0) {
+					this.resourcePoints.push(Point(Math.random() * width, Math.random() * height));
+				}
+
 				for(var i=0; i<this.people.length; i++) {
 					this.people[i].update(1);
+				}
+
+				for(var i=0; i<this.people.length; i++) {
+					if(this.people[i].hunger < 1) {
+						this.people.splice(i, 1);
+						i = 0;
+					}
 				}
 			},
 

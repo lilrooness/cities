@@ -2,7 +2,7 @@
 
 	var Point = function(x, y) {
 		return {x: x, y: y, recType: 'undef'};
-	}
+	};
 
 	var width = 640;
 	var height = 480;
