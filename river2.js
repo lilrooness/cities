@@ -83,5 +83,6 @@
 		}
 	};
 
+	//river function takes square coords (indexes into 2D array)
 	river(source.x / xResolution, source.y / yResolution, distToSink(source.x, source.y), 10);
 })();
