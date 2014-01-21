@@ -3,8 +3,9 @@
 	var closestResouce = function(x, y) {
 		var minDist = 1000;
 		var minIndex = 0;
-		for(var i=0; i<resourcePoints.length; i++) {
-			dist = Math.pow(x - resourcePoints[i].x,  2) + Math.pow(y - resourcePoints[i].y, 2);
+
+		for(var i=0; i<game.resourcePoints.length; i++) {
+			var dist = Math.sqrt(Math.pow(x - game.resourcePoints[i].x,  2) + Math.pow(y - game.resourcePoints[i].y, 2));
 
 			if(dist < minDist) {
 				minDist = dist;
@@ -15,7 +16,12 @@
 	};
 
 	var Point = function(x, y) {
-		return {x: x, y: y, recType: 'undef'};
+		return {
+			x: x,
+			y: y,
+			resource: 100,
+			recType: 'undef'
+		};
 	};
 
 	var Person = function(x, y) {
@@ -23,15 +29,72 @@
 			x: x,
 			y: y,
 			age: 0,
+			atWaypoint: false,
 
 			waypoint: {x: x, y: y},
 
 			update: function(time) {
 				var resouceIndex = closestResouce(x, y);
+				this.setWayPoint({x: game.resourcePoints[resouceIndex].x, y: game.resourcePoints[resouceIndex].y});
+				this.moveTo(waypoint);
+				if(this.atWaypoint) {
+					game.resourcePoints[resouceIndex].resource--;
+					if(game.resourcePoints[resouceIndex].resource == 0) {
+						this.atWaypoint = false;
+						game.resourcePoints.splice(resouceIndex, 1);
+					}
+				}
 			},
 
-			setWayPoint: function(x, y) {
-				waypoint = Point(this.x, this.y);
+			setWayPoint: function(point) {
+				waypoint = {x: point.x, y: point.y};
+			},
+
+			moveTo: function(waypoint) {
+				if(!this.atWaypoint) {
+					var mag = Math.sqrt(Math.pow(waypoint.x - this.x, 2) + Math.pow(waypoint.y - this.y, 2));
+					if(mag >10) {
+						this.x += ((waypoint.x - this.x) / mag) * 10;
+						this.y += ((waypoint.y - this.y) / mag) * 10;
+					} else {
+						this.atWaypoint = true;
+					}
+				}
+			}
+		};
+	};
+
+	var Game = function() {
+		return {
+			fps: 60,
+			people: [],
+			numResources: 30,
+			resourcePoints: [],
+
+			tick: function() {
+				for(var i=0; i<this.people.length; i++) {
+					this.people[i].update(1);
+				}
+			},
+
+			render: function() {
+				
+				ctx.fillStyle = "white";
+				ctx.fillRect(0, 0, width, height);
+
+				ctx.fillStyle = "red";
+				for(var i=0; i<this.resourcePoints.length; i++) {
+					ctx.beginPath();
+					ctx.arc(this.resourcePoints[i].x, this.resourcePoints[i].y, 5, 0, Math.PI*2);
+					ctx.stroke();
+				}
+
+				ctx.fillStyle = "back"
+				for(var i=0; i<game.people.length; i++) {
+					ctx.beginPath();
+					ctx.arc(this.people[i].x, this.people[i].y, 2, 0, Math.PI*2);
+					ctx.stroke();
+				}
 			}
 		};
 	};
@@ -40,14 +103,20 @@
 	var height = 480;
 
 	var ctx = document.getElementById("canvas").getContext('2d');
+	game = Game();
 
-	var numResources = 30;
-	var resourcePoints = [];
-
-	for(var i=0; i < numResources; i++) {
-		resourcePoints.push(Point(Math.random() * width, Math.random() * height));
-		ctx.beginPath();
-		ctx.arc(resourcePoints[i].x, resourcePoints[i].y, 5, 0, Math.PI*2);
-		ctx.stroke();
+	for(var i=0; i < game.numResources; i++) {
+		game.resourcePoints.push(Point(Math.random() * width, Math.random() * height));
 	}
+
+	for(var i=0; i<10; i++) {
+		game.people.push(Person(Math.random() * width, Math.random() * height));
+	}
+
+	setInterval(function() {
+		game.tick();
+		game.render();
+
+	}, 1000/40);
+
 })();
