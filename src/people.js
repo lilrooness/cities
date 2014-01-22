@@ -5,11 +5,15 @@ module.exports = function(x, y) {
 	var hunger = 1000;
 	var alive = true;
 	var currentResourceIndex = -1;
+	var resource = 0;
+
+	var buildings = []; //array of buildings indexes
 
 	var update = function(time) {
 		if(hunger < 1) {
 			alive = false;
 		}
+
 		moveTo(waypoint);
 	};
 
@@ -28,6 +32,8 @@ module.exports = function(x, y) {
 		currentResourceIndex: currentResourceIndex,
 		hunger: hunger,
 		alive: alive,
+		buildings: buildings,
+		resource: resource,
 
 		update: update,
 		moveTo: moveTo
