@@ -1,10 +1,10 @@
 var tileImages = require("./tiles");
 
 module.exports = (function() {
-  var canvas, ctx, map, ts, threshold,
+  var canvas, ctx, map, ts, threshold, lookup,
     camera, tiles, entities, resources;
 
-  camera = { x:0, y:0, zoom:1 };
+  camera = { x:0, y:0, zoom:1, w:0, h:0 };
   
   // Tile Size  
   ts = 24;
@@ -24,6 +24,11 @@ module.exports = (function() {
     snow: 0.98
   };
 
+  // # Lookup
+  // A lookup array
+  // for tile images
+  lookup = [];
+
   // # init
   // Initializes the engine and begins the
   // rendering process. Should only be called
@@ -33,7 +38,7 @@ module.exports = (function() {
     ctx = canvas.getContext('2d');
     fullscreen();
     render();
-    setInterval(render, 50);  
+    setInterval(render, 50);
   }
 
   // # fullscreen
@@ -45,6 +50,8 @@ module.exports = (function() {
     ctx.height = document.body.clientHeight;
     canvas.width = ctx.width;
     canvas.height = ctx.height;
+    camera.w = ctx.width / ts;
+    camera.h = ctx.height /ts;
   }
 
   // # loadMap
@@ -66,8 +73,6 @@ module.exports = (function() {
     index = 0;
     for(type in threshold) {
       tiles[index] = tileImages[type];
-      // Convert threshold to be a lookup
-      threshold[index] = type;
       index += 1;
     }
      
@@ -76,6 +81,14 @@ module.exports = (function() {
         map[x][y] = mapToTile(map[x][y]);
       }
     }
+   
+    // create the lookup 
+    index = 0;
+    for(type in threshold) {
+      lookup[index] = type;
+      index += 1;
+    }
+
     return map;
   }
 
@@ -100,7 +113,24 @@ module.exports = (function() {
   // Returns the name of the type
   // of tile at x, y
   function tileAt(x, y) {
-    return threshold[map[x][y]];
+    return lookup[map[x][y]];
+  }
+
+  // # region
+  // Returns all the tiles of a given
+  // type e.g. 'grass'
+  function region(type) {
+    var x, y, index, results;
+    results = [];
+    index = lookup.indexOf(type);
+    for(x = 0; x < map.length; x++) {
+      for(y = 0; y < map[x].length; y++) {
+        if(map[x][y] === index) {
+          results.push({ x:x, y:y });
+        }
+      }
+    }
+    return results;
   }
 
   // # render
@@ -111,18 +141,20 @@ module.exports = (function() {
     update();
     
     ctx.clearRect(0, 0, ctx.width, ctx.height);
-     
-    for(x = 0; x < map.length; x++) {
-      for(y = 0; y < map[x].length; y++) {
+    for(x = camera.x; x < camera.x + camera.w; x++) {
+      for(y = camera.y; y < camera.y + camera.h; y++) {
         tile = tiles[map[x][y]];
-        ctx.drawImage(tile, 
-          (x - camera.x) * ts * camera.zoom, 
-          (y - camera.y) * ts * camera.zoom,
-          ts * camera.zoom,
-          ts * camera.zoom
-        );
+        ctx.save(); 
+        
+        ctx.translate((x - camera.x) * ts * camera.zoom,
+          (y - camera.y) * ts * camera.zoom);
+        
+        ctx.drawImage(tile, 0, 0, ts * camera.zoom,
+          ts * camera.zoom);
+        
+        ctx.restore();
       }
-    }    
+    }
     
     renderResources();
     renderEntities();
@@ -138,12 +170,12 @@ module.exports = (function() {
 
   function update() {
     if(keys.left) {
-      camera.x--;
+      if(camera.x > 0) camera.x--;
     } else if(keys.right) {
       camera.x++;
     }
     if(keys.up) {
-      camera.y--;
+      if(camera.y > 0) camera.y--;
     } else if(keys.down) {
       camera.y++;
     }
@@ -157,13 +189,17 @@ module.exports = (function() {
   }
 
   function renderResources() {
+
     for(var i = 0; i < resources.length; i++) {
       var r = resources[i];
-      ctx.drawImage(r.sprite, 
-        (r.x - camera.x) * ts * camera.zoom, 
-        (r.y - camera.y) * ts * camera.zoom, 
-        r.w * camera.zoom, r.h * camera.zoom
-      );
+      ctx.save();      
+      ctx.translate(
+        (r.x - camera.x) * ts * camera.zoom,
+        (r.y - camera.y) * ts * camera.zoom);
+      
+      ctx.drawImage(r.sprite, 0, 0, r.w * camera.zoom, 
+        r.h * camera.zoom);
+      ctx.restore();
     }
   }
   
@@ -175,13 +211,23 @@ module.exports = (function() {
 
   function renderEntities() {
     for(var i = 0; i < entities.length; i++) {
+      var e = entities[i];
+      ctx.save(); 
+      ctx.translate(
+        (e.x - camera.x) * ts * camera.zoom,
+        (e.y - camera.y) * ts * camera.zoom);
       
+      ctx.drawImage(e.sprite, 0, 0, e.w * camera.zoom, 
+        e.h * camera.zoom);
+      ctx.restore();
     }
   }
 
   function updateEntities() {
     for(var i = 0; i < entities.length; i++) {
-      
+      var e = entities[i];
+      e.x += e.i;
+      e.y += e.j;
     }
   }
   
@@ -190,6 +236,8 @@ module.exports = (function() {
     fullscreen: fullscreen,
     loadMap: loadMap,
     spawnEntity: spawnEntity,
-    spawnResource: spawnResource
+    spawnResource: spawnResource,
+    tileAt: tileAt,
+    region: region
   }
 })();

@@ -1,16 +1,27 @@
 var engine = require('./engine')
   , map = require('./map')
-  , Resource = require('./Resource');
+  , npcs = require('./npcs') 
+  , resources = require('./resources');
+  
+function placeResources() {
+  console.table(engine.region('grass'))   
+}
 
-var Tree = new Resource({
-  sprite: 'tree',
-  h: 20,
-  w: 20
-});
-
-var t = new Tree({ x:20, y:20 });
-engine.spawnResource(t);
+function placeNpcs() {
+  for(var i = 0; i < 10; i++) {
+    engine.spawnEntity(new npcs.Dwarf({
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      i: 0,
+      j: 0
+    }));
+  }
+}
 
 engine.loadMap(map.random(150, 150));
+
+placeNpcs();
+placeResources();
+
 window.addEventListener('load', engine.init);
 window.addEventListener('resize', engine.fullscreen);
