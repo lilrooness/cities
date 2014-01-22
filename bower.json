@@ -15,6 +15,7 @@
     "tests"
   ],
   "dependencies": {
-    "primer": "*"
+    "primer": "*",
+    "keystate": "*"
   }
 }

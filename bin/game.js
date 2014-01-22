@@ -1,361 +1,391 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+module.exports = function(attributes) {
+  return function(settings) {
+    var key, spriteUrl;
+    
+    for(key in settings) {
+      attributes[key] = settings[key];
+    }
 
-module.exports = function() {
-  var canvas, ctx, map;
-  
-  function init() {
-    canvas = document.querySelector('#map');
-    ctx = canvas.getContext('2d');  
+    spriteUrl = attributes.sprite;
+    attributes.sprite = new Image();
+    attributes.sprite.src = 'assets/' + spriteUrl + '.png';    
+
+    return attributes;
   }
-  
-  window.addEventListener('load', init);
 }
 
 
 
 },{}],2:[function(require,module,exports){
-var engine = require('./engine'),
-    map = require('./map');
+var tileImages = require("./tiles");
 
-engine.loadTiles(map.random());
+module.exports = (function() {
+  var canvas, ctx, map, ts, threshold,
+    camera, tiles, entities, resources;
 
-
-},{"./engine":1,"./map":3}],3:[function(require,module,exports){
-var noise = require('./noise');
-
-module.exports = function() {
-  var map;
+  camera = { x:0, y:0, zoom:1 };
   
-  function random() { 
-    noise.seed(Math.random());
+  // Tile Size  
+  ts = 24;
+  tiles = [];
+  
+  entities = [];
+  resources = [];
+  
+  // # Thresholds
+  // This defines the thresholds for map
+  // normalization.
+  threshold = {
+    water: 0,
+    sand: 0.3,
+    grass: 0.4,
+    stone: 0.8,
+    snow: 0.98
+  };
+
+  // # init
+  // Initializes the engine and begins the
+  // rendering process. Should only be called
+  // after the window has loaded.
+  function init() {
+    canvas = document.querySelector('#map');
+    ctx = canvas.getContext('2d');
+    fullscreen();
+    render();
+    setInterval(render, 50);  
+  }
+
+  // # fullscreen
+  // Sets the size of the canvas to be the
+  // size of the full window. Should be called
+  // whenever the window fires a resize event. 
+  function fullscreen() {
+    ctx.width = document.body.clientWidth;
+    ctx.height = document.body.clientHeight;
+    canvas.width = ctx.width;
+    canvas.height = ctx.height;
+  }
+
+  // # loadMap
+  // This function takes an array of tiles
+  // with values between 0 and 1 and loads
+  // it into the engine, ready to be rendered.
+  function loadMap(tileArray) {
+    map = normalize(tileArray);
+  }  
+
+  // # normalize
+  // Turns a map of values between 0 and 1
+  // into array index positions, based on
+  // output from mapToTile and the thresholds
+  // defined at the top of the engine.
+  function normalize(map) {
+    var x, y, type, index;
+    
+    index = 0;
+    for(type in threshold) {
+      tiles[index] = tileImages[type];
+      // Convert threshold to be a lookup
+      threshold[index] = type;
+      index += 1;
+    }
      
+    for(x = 0; x < map.length; x++) {
+      for(y = 0; y < map[x].length; y++) {
+        map[x][y] = mapToTile(map[x][y]);
+      }
+    }
+    return map;
   }
 
-  function fill() {
-    map = [];
-    for(var x = 0; x < 100; x++) {
-      map[x] = [];
-      for(var y = 0; y < 100; y++) {
-        map[x][y] = noise.simplex2(x, y);
+  // # mapToTile
+  // Turns a value in the range of 0 to 1
+  // into an array index for a tile type 
+  // based on threshold map.
+  function mapToTile(height) {
+    var type, tile, select, index;
+    index = 0;
+    select = 0;
+    for(type in threshold) {
+      if(height >= threshold[type]) {
+        select = index;
       }
-    } 
+      index++;
+    }
+    return select;
+  }
+
+  // # tileAt
+  // Returns the name of the type
+  // of tile at x, y
+  function tileAt(x, y) {
+    return threshold[map[x][y]];
+  }
+
+  // # render
+  // Y'know. It renders stuff.
+  function render() {
+    var x, y, tile;
+
+    update();
+    
+    ctx.clearRect(0, 0, ctx.width, ctx.height);
+     
+    for(x = 0; x < map.length; x++) {
+      for(y = 0; y < map[x].length; y++) {
+        tile = tiles[map[x][y]];
+        ctx.drawImage(tile, 
+          (x - camera.x) * ts * camera.zoom, 
+          (y - camera.y) * ts * camera.zoom,
+          ts * camera.zoom,
+          ts * camera.zoom
+        );
+      }
+    }    
+    
+    renderResources();
+    renderEntities();
+  }
+
+  function spawnEntity(entity) {
+    entities.push(entity);
+  }
+
+  function spawnResource(resource) {
+    resources.push(resource);
+  }
+
+  function update() {
+    if(keys.left) {
+      camera.x--;
+    } else if(keys.right) {
+      camera.x++;
+    }
+    if(keys.up) {
+      camera.y--;
+    } else if(keys.down) {
+      camera.y++;
+    }
+    if(keys.z) {
+      camera.zoom -= 0.1;
+    } else if(keys.x) {
+      camera.zoom += 0.1;
+    }
+    updateResources();
+    updateEntities();
+  }
+
+  function renderResources() {
+    for(var i = 0; i < resources.length; i++) {
+      var r = resources[i];
+      ctx.drawImage(r.sprite, 
+        (r.x - camera.x) * ts * camera.zoom, 
+        (r.y - camera.y) * ts * camera.zoom, 
+        r.w * camera.zoom, r.h * camera.zoom
+      );
+    }
   }
   
-  return map;
+  function updateResources() {
+    for(var i = 0; i < resources.length; i++) {
+      var r = resources[i];
+    }
+  }
+
+  function renderEntities() {
+    for(var i = 0; i < entities.length; i++) {
+      
+    }
+  }
+
+  function updateEntities() {
+    for(var i = 0; i < entities.length; i++) {
+      
+    }
+  }
+  
+  return {
+    init: init,
+    fullscreen: fullscreen,
+    loadMap: loadMap,
+    spawnEntity: spawnEntity,
+    spawnResource: spawnResource
+  }
+})();
+
+},{"./tiles":6}],3:[function(require,module,exports){
+var engine = require('./engine')
+  , map = require('./map')
+  , Resource = require('./Resource');
+
+var Tree = new Resource({
+  sprite: 'tree',
+  h: 20,
+  w: 20
+});
+
+var t = new Tree({ x:20, y:20 });
+engine.spawnResource(t);
+
+engine.loadMap(map.random(150, 150));
+window.addEventListener('load', engine.init);
+window.addEventListener('resize', engine.fullscreen);
+
+},{"./Resource":1,"./engine":2,"./map":5}],4:[function(require,module,exports){
+// I DID NOT WRITE THIS - Dan Prince //
+
+var p = 5;
+
+module.exports = function(w, h) {
+  var noiseArr = new Array();
+  
+  for (i = 0; i <= p; i++) {
+    noiseArr[i] = new Array();
+
+    for (j = 0; j <= p; j++) {
+      var height = Math.random();
+
+      if (i == 0 || j == 0 || i == p || j == p)
+        height = 1;
+
+      noiseArr[i][j] = height;
+    }
+  }
+
+  return (flatten(interpolate(noiseArr, w, h)));
 }
 
-},{"./noise":4}],4:[function(require,module,exports){
-/*
- * A speed-improved perlin and simplex noise algorithms for 2D.
- *
- * Based on example code by Stefan Gustavson (stegu@itn.liu.se).
- * Optimisations by Peter Eastman (peastman@drizzle.stanford.edu).
- * Better rank ordering method by Stefan Gustavson in 2012.
- * Converted to Javascript by Joseph Gentle.
- *
- * Version 2012-03-09
- *
- * This code was placed in the public domain by its original author,
- * Stefan Gustavson. You may use it as you see fit, but
- * attribution is appreciated.
- *
- */
+function interpolate(points, w, h) {
+  var noiseArr = new Array()
+  var x = 0;
+  var y = 0;
+  var n = w/p;
+  var m = h/p;
 
-(function(global){
-  var module = global.noise = {};
+  for (i = 0; i < w; i++) {
+    if (i != 0 && i % n == 0)
+      x++;
 
-  function Grad(x, y, z) {
-    this.x = x; this.y = y; this.z = z;
+    noiseArr[i] = new Array();
+    for (j = 0; j < h; j++) {
+
+      if (j != 0 && j % m == 0)
+        y++;
+
+      var mu_x = (i % n) / n;
+      var mu_2 = (1 - Math.cos(mu_x * Math.PI)) / 2;
+
+      var int_x1 = points[x][y] * (1 - mu_2) + points[x + 1][y] * mu_2;
+      var int_x2 = points[x][y + 1] * (1 - mu_2) + points[x + 1][y + 1] * mu_2;
+
+      var mu_y = (j % m) / m;
+      var mu_2 = (1 - Math.cos(mu_y * Math.PI)) / 2;
+      var int_y = int_x1 * (1 - mu_2) + int_x2 * mu_2;
+
+      noiseArr[i][j] = int_y;
+    }
+    y = 0;
+  }
+  return (noiseArr);
+}
+
+function flatten(points) {
+  var noiseArr = new Array()
+  for (i = 0; i < points.length; i++) {
+    noiseArr[i] = new Array()
+    for (j = 0; j < points[i].length; j++) {
+      /*
+      if (points[i][j] < 0.2)
+        noiseArr[i][j] = 0;
+
+      else if (points[i][j] < 0.4)
+        noiseArr[i][j] = 0.2;
+
+      else if (points[i][j] < 0.6)
+        noiseArr[i][j] = 0.4;
+
+      else if (points[i][j] < 0.8)
+        noiseArr[i][j] = 0.6;
+
+      else
+        noiseArr[i][j] = 1;*/
+      noiseArr[i][j] = 1 - points[i][j];
+    }
+  }
+
+  return (noiseArr);
+}
+
+},{}],5:[function(require,module,exports){
+var heightmap = require('./heightmap');
+
+
+module.exports = (function() {
+  
+  // # random
+  // Generates a map of with dimensions
+  // specified as arguments.
+  function random(w, h) { 
+    return heightmap(w, h);
+  }
+
+  // # flat
+  // Generates a map with dimensions
+  // specified as argument and constant
+  // height specified by height.
+  function flat(w, h, height) {
+    return fill(w, h, function() {
+      return height;
+    });
+  }
+
+  // # fill
+  // Fills a map of dimensions
+  // specified by parameters.
+  function fill(w, h, fillFn) {
+    var x, y, map = [];
+    for(x = 0; x < w; x++) {
+      map[x] = [];
+      for(y = 0; y < h; y++) {
+        map[x][y] = fillFn(x, y);
+      }
+    }
+    return map;
   }
   
-  Grad.prototype.dot2 = function(x, y) {
-    return this.x*x + this.y*y;
-  };
-
-  Grad.prototype.dot3 = function(x, y, z) {
-    return this.x*x + this.y*y + this.z*z;
-  };
-
-  var grad3 = [new Grad(1,1,0),new Grad(-1,1,0),new Grad(1,-1,0),new Grad(-1,-1,0),
-               new Grad(1,0,1),new Grad(-1,0,1),new Grad(1,0,-1),new Grad(-1,0,-1),
-               new Grad(0,1,1),new Grad(0,-1,1),new Grad(0,1,-1),new Grad(0,-1,-1)];
-
-  var p = [151,160,137,91,90,15,
-  131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
-  190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,
-  88,237,149,56,87,174,20,125,136,171,168, 68,175,74,165,71,134,139,48,27,166,
-  77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,
-  102,143,54, 65,25,63,161, 1,216,80,73,209,76,132,187,208, 89,18,169,200,196,
-  135,130,116,188,159,86,164,100,109,198,173,186, 3,64,52,217,226,250,124,123,
-  5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,
-  223,183,170,213,119,248,152, 2,44,154,163, 70,221,153,101,155,167, 43,172,9,
-  129,22,39,253, 19,98,108,110,79,113,224,232,178,185, 112,104,218,246,97,228,
-  251,34,242,193,238,210,144,12,191,179,162,241, 81,51,145,235,249,14,239,107,
-  49,192,214, 31,181,199,106,157,184, 84,204,176,115,121,50,45,127, 4,150,254,
-  138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
-  // To remove the need for index wrapping, double the permutation table length
-  var perm = new Array(512);
-  var gradP = new Array(512);
-
-  // This isn't a very good seeding function, but it works ok. It supports 2^16
-  // different seed values. Write something better if you need more seeds.
-  module.seed = function(seed) {
-    if(seed > 0 && seed < 1) {
-      // Scale the seed out
-      seed *= 65536;
-    }
-
-    seed = Math.floor(seed);
-    if(seed < 256) {
-      seed |= seed << 8;
-    }
-
-    for(var i = 0; i < 256; i++) {
-      var v;
-      if (i & 1) {
-        v = p[i] ^ (seed & 255);
-      } else {
-        v = p[i] ^ ((seed>>8) & 255);
-      }
-
-      perm[i] = perm[i + 256] = v;
-      gradP[i] = gradP[i + 256] = grad3[v % 12];
-    }
-  };
-
-  module.seed(0);
-
-  /*
-  for(var i=0; i<256; i++) {
-    perm[i] = perm[i + 256] = p[i];
-    gradP[i] = gradP[i + 256] = grad3[perm[i] % 12];
-  }*/
-
-  // Skewing and unskewing factors for 2, 3, and 4 dimensions
-  var F2 = 0.5*(Math.sqrt(3)-1);
-  var G2 = (3-Math.sqrt(3))/6;
-
-  var F3 = 1/3;
-  var G3 = 1/6;
-
-  // 2D simplex noise
-  module.simplex2 = function(xin, yin) {
-    var n0, n1, n2; // Noise contributions from the three corners
-    // Skew the input space to determine which simplex cell we're in
-    var s = (xin+yin)*F2; // Hairy factor for 2D
-    var i = Math.floor(xin+s);
-    var j = Math.floor(yin+s);
-    var t = (i+j)*G2;
-    var x0 = xin-i+t; // The x,y distances from the cell origin, unskewed.
-    var y0 = yin-j+t;
-    // For the 2D case, the simplex shape is an equilateral triangle.
-    // Determine which simplex we are in.
-    var i1, j1; // Offsets for second (middle) corner of simplex in (i,j) coords
-    if(x0>y0) { // lower triangle, XY order: (0,0)->(1,0)->(1,1)
-      i1=1; j1=0;
-    } else {    // upper triangle, YX order: (0,0)->(0,1)->(1,1)
-      i1=0; j1=1;
-    }
-    // A step of (1,0) in (i,j) means a step of (1-c,-c) in (x,y), and
-    // a step of (0,1) in (i,j) means a step of (-c,1-c) in (x,y), where
-    // c = (3-sqrt(3))/6
-    var x1 = x0 - i1 + G2; // Offsets for middle corner in (x,y) unskewed coords
-    var y1 = y0 - j1 + G2;
-    var x2 = x0 - 1 + 2 * G2; // Offsets for last corner in (x,y) unskewed coords
-    var y2 = y0 - 1 + 2 * G2;
-    // Work out the hashed gradient indices of the three simplex corners
-    i &= 255;
-    j &= 255;
-    var gi0 = gradP[i+perm[j]];
-    var gi1 = gradP[i+i1+perm[j+j1]];
-    var gi2 = gradP[i+1+perm[j+1]];
-    // Calculate the contribution from the three corners
-    var t0 = 0.5 - x0*x0-y0*y0;
-    if(t0<0) {
-      n0 = 0;
-    } else {
-      t0 *= t0;
-      n0 = t0 * t0 * gi0.dot2(x0, y0);  // (x,y) of grad3 used for 2D gradient
-    }
-    var t1 = 0.5 - x1*x1-y1*y1;
-    if(t1<0) {
-      n1 = 0;
-    } else {
-      t1 *= t1;
-      n1 = t1 * t1 * gi1.dot2(x1, y1);
-    }
-    var t2 = 0.5 - x2*x2-y2*y2;
-    if(t2<0) {
-      n2 = 0;
-    } else {
-      t2 *= t2;
-      n2 = t2 * t2 * gi2.dot2(x2, y2);
-    }
-    // Add contributions from each corner to get the final noise value.
-    // The result is scaled to return values in the interval [-1,1].
-    return 70 * (n0 + n1 + n2);
-  };
-
-  // 3D simplex noise
-  module.simplex3 = function(xin, yin, zin) {
-    var n0, n1, n2, n3; // Noise contributions from the four corners
-
-    // Skew the input space to determine which simplex cell we're in
-    var s = (xin+yin+zin)*F3; // Hairy factor for 2D
-    var i = Math.floor(xin+s);
-    var j = Math.floor(yin+s);
-    var k = Math.floor(zin+s);
-
-    var t = (i+j+k)*G3;
-    var x0 = xin-i+t; // The x,y distances from the cell origin, unskewed.
-    var y0 = yin-j+t;
-    var z0 = zin-k+t;
-
-    // For the 3D case, the simplex shape is a slightly irregular tetrahedron.
-    // Determine which simplex we are in.
-    var i1, j1, k1; // Offsets for second corner of simplex in (i,j,k) coords
-    var i2, j2, k2; // Offsets for third corner of simplex in (i,j,k) coords
-    if(x0 >= y0) {
-      if(y0 >= z0)      { i1=1; j1=0; k1=0; i2=1; j2=1; k2=0; }
-      else if(x0 >= z0) { i1=1; j1=0; k1=0; i2=1; j2=0; k2=1; }
-      else              { i1=0; j1=0; k1=1; i2=1; j2=0; k2=1; }
-    } else {
-      if(y0 < z0)      { i1=0; j1=0; k1=1; i2=0; j2=1; k2=1; }
-      else if(x0 < z0) { i1=0; j1=1; k1=0; i2=0; j2=1; k2=1; }
-      else             { i1=0; j1=1; k1=0; i2=1; j2=1; k2=0; }
-    }
-    // A step of (1,0,0) in (i,j,k) means a step of (1-c,-c,-c) in (x,y,z),
-    // a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and
-    // a step of (0,0,1) in (i,j,k) means a step of (-c,-c,1-c) in (x,y,z), where
-    // c = 1/6.
-    var x1 = x0 - i1 + G3; // Offsets for second corner
-    var y1 = y0 - j1 + G3;
-    var z1 = z0 - k1 + G3;
-
-    var x2 = x0 - i2 + 2 * G3; // Offsets for third corner
-    var y2 = y0 - j2 + 2 * G3;
-    var z2 = z0 - k2 + 2 * G3;
-
-    var x3 = x0 - 1 + 3 * G3; // Offsets for fourth corner
-    var y3 = y0 - 1 + 3 * G3;
-    var z3 = z0 - 1 + 3 * G3;
-
-    // Work out the hashed gradient indices of the four simplex corners
-    i &= 255;
-    j &= 255;
-    k &= 255;
-    var gi0 = gradP[i+   perm[j+   perm[k   ]]];
-    var gi1 = gradP[i+i1+perm[j+j1+perm[k+k1]]];
-    var gi2 = gradP[i+i2+perm[j+j2+perm[k+k2]]];
-    var gi3 = gradP[i+ 1+perm[j+ 1+perm[k+ 1]]];
-
-    // Calculate the contribution from the four corners
-    var t0 = 0.5 - x0*x0-y0*y0-z0*z0;
-    if(t0<0) {
-      n0 = 0;
-    } else {
-      t0 *= t0;
-      n0 = t0 * t0 * gi0.dot3(x0, y0, z0);  // (x,y) of grad3 used for 2D gradient
-    }
-    var t1 = 0.5 - x1*x1-y1*y1-z1*z1;
-    if(t1<0) {
-      n1 = 0;
-    } else {
-      t1 *= t1;
-      n1 = t1 * t1 * gi1.dot3(x1, y1, z1);
-    }
-    var t2 = 0.5 - x2*x2-y2*y2-z2*z2;
-    if(t2<0) {
-      n2 = 0;
-    } else {
-      t2 *= t2;
-      n2 = t2 * t2 * gi2.dot3(x2, y2, z2);
-    }
-    var t3 = 0.5 - x3*x3-y3*y3-z3*z3;
-    if(t3<0) {
-      n3 = 0;
-    } else {
-      t3 *= t3;
-      n3 = t3 * t3 * gi3.dot3(x3, y3, z3);
-    }
-    // Add contributions from each corner to get the final noise value.
-    // The result is scaled to return values in the interval [-1,1].
-    return 32 * (n0 + n1 + n2 + n3);
-
-  };
-
-  // ##### Perlin noise stuff
-
-  function fade(t) {
-    return t*t*t*(t*(t*6-15)+10);
+  return {
+    random: random,
+    flat: flat,
+    fill: fill
   }
+})();
 
-  function lerp(a, b, t) {
-    return (1-t)*a + t*b;
+},{"./heightmap":4}],6:[function(require,module,exports){
+var tiles = require('./tiles.json');
+
+module.exports = (function() {
+  var cache, type;
+ 
+  cache = {};
+ 
+  for(type in tiles) {
+    cache[type] = new Image();
+    cache[type].src = 'assets/' + tiles[type];
   }
+  
+  return cache
+})();
 
-  // 2D Perlin Noise
-  module.perlin2 = function(x, y) {
-    // Find unit grid cell containing point
-    var X = Math.floor(x), Y = Math.floor(y);
-    // Get relative xy coordinates of point within that cell
-    x = x - X; y = y - Y;
-    // Wrap the integer cells at 255 (smaller integer period can be introduced here)
-    X = X & 255; Y = Y & 255;
+},{"./tiles.json":7}],7:[function(require,module,exports){
+module.exports={
+  "water": "floor.png",
+  "grass": "grass.png",
+  "sand": "sand.png",
+  "snow": "snow.png",
+  "water": "water.png",
+  "stone": "stone.png"
+}
 
-    // Calculate noise contributions from each of the four corners
-    var n00 = gradP[X+perm[Y]].dot2(x, y);
-    var n01 = gradP[X+perm[Y+1]].dot2(x, y-1);
-    var n10 = gradP[X+1+perm[Y]].dot2(x-1, y);
-    var n11 = gradP[X+1+perm[Y+1]].dot2(x-1, y-1);
-
-    // Compute the fade curve value for x
-    var u = fade(x);
-
-    // Interpolate the four results
-    return lerp(
-        lerp(n00, n10, u),
-        lerp(n01, n11, u),
-       fade(y));
-  };
-
-  // 3D Perlin Noise
-  module.perlin3 = function(x, y, z) {
-    // Find unit grid cell containing point
-    var X = Math.floor(x), Y = Math.floor(y), Z = Math.floor(z);
-    // Get relative xyz coordinates of point within that cell
-    x = x - X; y = y - Y; z = z - Z;
-    // Wrap the integer cells at 255 (smaller integer period can be introduced here)
-    X = X & 255; Y = Y & 255; Z = Z & 255;
-
-    // Calculate noise contributions from each of the eight corners
-    var n000 = gradP[X+  perm[Y+  perm[Z  ]]].dot3(x,   y,     z);
-    var n001 = gradP[X+  perm[Y+  perm[Z+1]]].dot3(x,   y,   z-1);
-    var n010 = gradP[X+  perm[Y+1+perm[Z  ]]].dot3(x,   y-1,   z);
-    var n011 = gradP[X+  perm[Y+1+perm[Z+1]]].dot3(x,   y-1, z-1);
-    var n100 = gradP[X+1+perm[Y+  perm[Z  ]]].dot3(x-1,   y,   z);
-    var n101 = gradP[X+1+perm[Y+  perm[Z+1]]].dot3(x-1,   y, z-1);
-    var n110 = gradP[X+1+perm[Y+1+perm[Z  ]]].dot3(x-1, y-1,   z);
-    var n111 = gradP[X+1+perm[Y+1+perm[Z+1]]].dot3(x-1, y-1, z-1);
-
-    // Compute the fade curve value for x, y, z
-    var u = fade(x);
-    var v = fade(y);
-    var w = fade(z);
-
-    // Interpolate
-    return lerp(
-        lerp(
-          lerp(n000, n100, u),
-          lerp(n001, n101, u), w),
-        lerp(
-          lerp(n010, n110, u),
-          lerp(n011, n111, u), w),
-       v);
-  };
-
-})(this);
-
-module.exports = this.noise;
-
-},{}]},{},[2])
+},{}]},{},[3])
+//@ sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZ2VuZXJhdGVkLmpzIiwic291cmNlcyI6WyIvaG9tZS9kYW4vZGV2L2NpdGllcy9ub2RlX21vZHVsZXMvZ3J1bnQtYnJvd3NlcmlmeS9ub2RlX21vZHVsZXMvYnJvd3NlcmlmeS9ub2RlX21vZHVsZXMvYnJvd3Nlci1wYWNrL19wcmVsdWRlLmpzIiwiL2hvbWUvZGFuL2Rldi9jaXRpZXMvc3JjL1Jlc291cmNlLmpzIiwiL2hvbWUvZGFuL2Rldi9jaXRpZXMvc3JjL2VuZ2luZS5qcyIsIi9ob21lL2Rhbi9kZXYvY2l0aWVzL3NyYy9nYW1lLmpzIiwiL2hvbWUvZGFuL2Rldi9jaXRpZXMvc3JjL2hlaWdodG1hcC5qcyIsIi9ob21lL2Rhbi9kZXYvY2l0aWVzL3NyYy9tYXAuanMiLCIvaG9tZS9kYW4vZGV2L2NpdGllcy9zcmMvdGlsZXMuanMiLCIvaG9tZS9kYW4vZGV2L2NpdGllcy9zcmMvdGlsZXMuanNvbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQTtBQ0FBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTs7QUNqQkE7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7O0FDbk1BO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7O0FDaEJBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTs7QUNuRkE7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7O0FDMUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTs7QUNkQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0EiLCJzb3VyY2VzQ29udGVudCI6WyIoZnVuY3Rpb24gZSh0LG4scil7ZnVuY3Rpb24gcyhvLHUpe2lmKCFuW29dKXtpZighdFtvXSl7dmFyIGE9dHlwZW9mIHJlcXVpcmU9PVwiZnVuY3Rpb25cIiYmcmVxdWlyZTtpZighdSYmYSlyZXR1cm4gYShvLCEwKTtpZihpKXJldHVybiBpKG8sITApO3Rocm93IG5ldyBFcnJvcihcIkNhbm5vdCBmaW5kIG1vZHVsZSAnXCIrbytcIidcIil9dmFyIGY9bltvXT17ZXhwb3J0czp7fX07dFtvXVswXS5jYWxsKGYuZXhwb3J0cyxmdW5jdGlvbihlKXt2YXIgbj10W29dWzFdW2VdO3JldHVybiBzKG4/bjplKX0sZixmLmV4cG9ydHMsZSx0LG4scil9cmV0dXJuIG5bb10uZXhwb3J0c312YXIgaT10eXBlb2YgcmVxdWlyZT09XCJmdW5jdGlvblwiJiZyZXF1aXJlO2Zvcih2YXIgbz0wO288ci5sZW5ndGg7bysrKXMocltvXSk7cmV0dXJuIHN9KSIsIm1vZHVsZS5leHBvcnRzID0gZnVuY3Rpb24oYXR0cmlidXRlcykge1xuICByZXR1cm4gZnVuY3Rpb24oc2V0dGluZ3MpIHtcbiAgICB2YXIga2V5LCBzcHJpdGVVcmw7XG4gICAgXG4gICAgZm9yKGtleSBpbiBzZXR0aW5ncykge1xuICAgICAgYXR0cmlidXRlc1trZXldID0gc2V0dGluZ3Nba2V5XTtcbiAgICB9XG5cbiAgICBzcHJpdGVVcmwgPSBhdHRyaWJ1dGVzLnNwcml0ZTtcbiAgICBhdHRyaWJ1dGVzLnNwcml0ZSA9IG5ldyBJbWFnZSgpO1xuICAgIGF0dHJpYnV0ZXMuc3ByaXRlLnNyYyA9ICdhc3NldHMvJyArIHNwcml0ZVVybCArICcucG5nJzsgICAgXG5cbiAgICByZXR1cm4gYXR0cmlidXRlcztcbiAgfVxufVxuXG5cbiIsInZhciB0aWxlSW1hZ2VzID0gcmVxdWlyZShcIi4vdGlsZXNcIik7XG5cbm1vZHVsZS5leHBvcnRzID0gKGZ1bmN0aW9uKCkge1xuICB2YXIgY2FudmFzLCBjdHgsIG1hcCwgdHMsIHRocmVzaG9sZCxcbiAgICBjYW1lcmEsIHRpbGVzLCBlbnRpdGllcywgcmVzb3VyY2VzO1xuXG4gIGNhbWVyYSA9IHsgeDowLCB5OjAsIHpvb206MSB9O1xuICBcbiAgLy8gVGlsZSBTaXplICBcbiAgdHMgPSAyNDtcbiAgdGlsZXMgPSBbXTtcbiAgXG4gIGVudGl0aWVzID0gW107XG4gIHJlc291cmNlcyA9IFtdO1xuICBcbiAgLy8gIyBUaHJlc2hvbGRzXG4gIC8vIFRoaXMgZGVmaW5lcyB0aGUgdGhyZXNob2xkcyBmb3IgbWFwXG4gIC8vIG5vcm1hbGl6YXRpb24uXG4gIHRocmVzaG9sZCA9IHtcbiAgICB3YXRlcjogMCxcbiAgICBzYW5kOiAwLjMsXG4gICAgZ3Jhc3M6IDAuNCxcbiAgICBzdG9uZTogMC44LFxuICAgIHNub3c6IDAuOThcbiAgfTtcblxuICAvLyAjIGluaXRcbiAgLy8gSW5pdGlhbGl6ZXMgdGhlIGVuZ2luZSBhbmQgYmVnaW5zIHRoZVxuICAvLyByZW5kZXJpbmcgcHJvY2Vzcy4gU2hvdWxkIG9ubHkgYmUgY2FsbGVkXG4gIC8vIGFmdGVyIHRoZSB3aW5kb3cgaGFzIGxvYWRlZC5cbiAgZnVuY3Rpb24gaW5pdCgpIHtcbiAgICBjYW52YXMgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKCcjbWFwJyk7XG4gICAgY3R4ID0gY2FudmFzLmdldENvbnRleHQoJzJkJyk7XG4gICAgZnVsbHNjcmVlbigpO1xuICAgIHJlbmRlcigpO1xuICAgIHNldEludGVydmFsKHJlbmRlciwgNTApOyAgXG4gIH1cblxuICAvLyAjIGZ1bGxzY3JlZW5cbiAgLy8gU2V0cyB0aGUgc2l6ZSBvZiB0aGUgY2FudmFzIHRvIGJlIHRoZVxuICAvLyBzaXplIG9mIHRoZSBmdWxsIHdpbmRvdy4gU2hvdWxkIGJlIGNhbGxlZFxuICAvLyB3aGVuZXZlciB0aGUgd2luZG93IGZpcmVzIGEgcmVzaXplIGV2ZW50LiBcbiAgZnVuY3Rpb24gZnVsbHNjcmVlbigpIHtcbiAgICBjdHgud2lkdGggPSBkb2N1bWVudC5ib2R5LmNsaWVudFdpZHRoO1xuICAgIGN0eC5oZWlnaHQgPSBkb2N1bWVudC5ib2R5LmNsaWVudEhlaWdodDtcbiAgICBjYW52YXMud2lkdGggPSBjdHgud2lkdGg7XG4gICAgY2FudmFzLmhlaWdodCA9IGN0eC5oZWlnaHQ7XG4gIH1cblxuICAvLyAjIGxvYWRNYXBcbiAgLy8gVGhpcyBmdW5jdGlvbiB0YWtlcyBhbiBhcnJheSBvZiB0aWxlc1xuICAvLyB3aXRoIHZhbHVlcyBiZXR3ZWVuIDAgYW5kIDEgYW5kIGxvYWRzXG4gIC8vIGl0IGludG8gdGhlIGVuZ2luZSwgcmVhZHkgdG8gYmUgcmVuZGVyZWQuXG4gIGZ1bmN0aW9uIGxvYWRNYXAodGlsZUFycmF5KSB7XG4gICAgbWFwID0gbm9ybWFsaXplKHRpbGVBcnJheSk7XG4gIH0gIFxuXG4gIC8vICMgbm9ybWFsaXplXG4gIC8vIFR1cm5zIGEgbWFwIG9mIHZhbHVlcyBiZXR3ZWVuIDAgYW5kIDFcbiAgLy8gaW50byBhcnJheSBpbmRleCBwb3NpdGlvbnMsIGJhc2VkIG9uXG4gIC8vIG91dHB1dCBmcm9tIG1hcFRvVGlsZSBhbmQgdGhlIHRocmVzaG9sZHNcbiAgLy8gZGVmaW5lZCBhdCB0aGUgdG9wIG9mIHRoZSBlbmdpbmUuXG4gIGZ1bmN0aW9uIG5vcm1hbGl6ZShtYXApIHtcbiAgICB2YXIgeCwgeSwgdHlwZSwgaW5kZXg7XG4gICAgXG4gICAgaW5kZXggPSAwO1xuICAgIGZvcih0eXBlIGluIHRocmVzaG9sZCkge1xuICAgICAgdGlsZXNbaW5kZXhdID0gdGlsZUltYWdlc1t0eXBlXTtcbiAgICAgIC8vIENvbnZlcnQgdGhyZXNob2xkIHRvIGJlIGEgbG9va3VwXG4gICAgICB0aHJlc2hvbGRbaW5kZXhdID0gdHlwZTtcbiAgICAgIGluZGV4ICs9IDE7XG4gICAgfVxuICAgICBcbiAgICBmb3IoeCA9IDA7IHggPCBtYXAubGVuZ3RoOyB4KyspIHtcbiAgICAgIGZvcih5ID0gMDsgeSA8IG1hcFt4XS5sZW5ndGg7IHkrKykge1xuICAgICAgICBtYXBbeF1beV0gPSBtYXBUb1RpbGUobWFwW3hdW3ldKTtcbiAgICAgIH1cbiAgICB9XG4gICAgcmV0dXJuIG1hcDtcbiAgfVxuXG4gIC8vICMgbWFwVG9UaWxlXG4gIC8vIFR1cm5zIGEgdmFsdWUgaW4gdGhlIHJhbmdlIG9mIDAgdG8gMVxuICAvLyBpbnRvIGFuIGFycmF5IGluZGV4IGZvciBhIHRpbGUgdHlwZSBcbiAgLy8gYmFzZWQgb24gdGhyZXNob2xkIG1hcC5cbiAgZnVuY3Rpb24gbWFwVG9UaWxlKGhlaWdodCkge1xuICAgIHZhciB0eXBlLCB0aWxlLCBzZWxlY3QsIGluZGV4O1xuICAgIGluZGV4ID0gMDtcbiAgICBzZWxlY3QgPSAwO1xuICAgIGZvcih0eXBlIGluIHRocmVzaG9sZCkge1xuICAgICAgaWYoaGVpZ2h0ID49IHRocmVzaG9sZFt0eXBlXSkge1xuICAgICAgICBzZWxlY3QgPSBpbmRleDtcbiAgICAgIH1cbiAgICAgIGluZGV4Kys7XG4gICAgfVxuICAgIHJldHVybiBzZWxlY3Q7XG4gIH1cblxuICAvLyAjIHRpbGVBdFxuICAvLyBSZXR1cm5zIHRoZSBuYW1lIG9mIHRoZSB0eXBlXG4gIC8vIG9mIHRpbGUgYXQgeCwgeVxuICBmdW5jdGlvbiB0aWxlQXQoeCwgeSkge1xuICAgIHJldHVybiB0aHJlc2hvbGRbbWFwW3hdW3ldXTtcbiAgfVxuXG4gIC8vICMgcmVuZGVyXG4gIC8vIFkna25vdy4gSXQgcmVuZGVycyBzdHVmZi5cbiAgZnVuY3Rpb24gcmVuZGVyKCkge1xuICAgIHZhciB4LCB5LCB0aWxlO1xuXG4gICAgdXBkYXRlKCk7XG4gICAgXG4gICAgY3R4LmNsZWFyUmVjdCgwLCAwLCBjdHgud2lkdGgsIGN0eC5oZWlnaHQpO1xuICAgICBcbiAgICBmb3IoeCA9IDA7IHggPCBtYXAubGVuZ3RoOyB4KyspIHtcbiAgICAgIGZvcih5ID0gMDsgeSA8IG1hcFt4XS5sZW5ndGg7IHkrKykge1xuICAgICAgICB0aWxlID0gdGlsZXNbbWFwW3hdW3ldXTtcbiAgICAgICAgY3R4LmRyYXdJbWFnZSh0aWxlLCBcbiAgICAgICAgICAoeCAtIGNhbWVyYS54KSAqIHRzICogY2FtZXJhLnpvb20sIFxuICAgICAgICAgICh5IC0gY2FtZXJhLnkpICogdHMgKiBjYW1lcmEuem9vbSxcbiAgICAgICAgICB0cyAqIGNhbWVyYS56b29tLFxuICAgICAgICAgIHRzICogY2FtZXJhLnpvb21cbiAgICAgICAgKTtcbiAgICAgIH1cbiAgICB9ICAgIFxuICAgIFxuICAgIHJlbmRlclJlc291cmNlcygpO1xuICAgIHJlbmRlckVudGl0aWVzKCk7XG4gIH1cblxuICBmdW5jdGlvbiBzcGF3bkVudGl0eShlbnRpdHkpIHtcbiAgICBlbnRpdGllcy5wdXNoKGVudGl0eSk7XG4gIH1cblxuICBmdW5jdGlvbiBzcGF3blJlc291cmNlKHJlc291cmNlKSB7XG4gICAgcmVzb3VyY2VzLnB1c2gocmVzb3VyY2UpO1xuICB9XG5cbiAgZnVuY3Rpb24gdXBkYXRlKCkge1xuICAgIGlmKGtleXMubGVmdCkge1xuICAgICAgY2FtZXJhLngtLTtcbiAgICB9IGVsc2UgaWYoa2V5cy5yaWdodCkge1xuICAgICAgY2FtZXJhLngrKztcbiAgICB9XG4gICAgaWYoa2V5cy51cCkge1xuICAgICAgY2FtZXJhLnktLTtcbiAgICB9IGVsc2UgaWYoa2V5cy5kb3duKSB7XG4gICAgICBjYW1lcmEueSsrO1xuICAgIH1cbiAgICBpZihrZXlzLnopIHtcbiAgICAgIGNhbWVyYS56b29tIC09IDAuMTtcbiAgICB9IGVsc2UgaWYoa2V5cy54KSB7XG4gICAgICBjYW1lcmEuem9vbSArPSAwLjE7XG4gICAgfVxuICAgIHVwZGF0ZVJlc291cmNlcygpO1xuICAgIHVwZGF0ZUVudGl0aWVzKCk7XG4gIH1cblxuICBmdW5jdGlvbiByZW5kZXJSZXNvdXJjZXMoKSB7XG4gICAgZm9yKHZhciBpID0gMDsgaSA8IHJlc291cmNlcy5sZW5ndGg7IGkrKykge1xuICAgICAgdmFyIHIgPSByZXNvdXJjZXNbaV07XG4gICAgICBjdHguZHJhd0ltYWdlKHIuc3ByaXRlLCBcbiAgICAgICAgKHIueCAtIGNhbWVyYS54KSAqIHRzICogY2FtZXJhLnpvb20sIFxuICAgICAgICAoci55IC0gY2FtZXJhLnkpICogdHMgKiBjYW1lcmEuem9vbSwgXG4gICAgICAgIHIudyAqIGNhbWVyYS56b29tLCByLmggKiBjYW1lcmEuem9vbVxuICAgICAgKTtcbiAgICB9XG4gIH1cbiAgXG4gIGZ1bmN0aW9uIHVwZGF0ZVJlc291cmNlcygpIHtcbiAgICBmb3IodmFyIGkgPSAwOyBpIDwgcmVzb3VyY2VzLmxlbmd0aDsgaSsrKSB7XG4gICAgICB2YXIgciA9IHJlc291cmNlc1tpXTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiByZW5kZXJFbnRpdGllcygpIHtcbiAgICBmb3IodmFyIGkgPSAwOyBpIDwgZW50aXRpZXMubGVuZ3RoOyBpKyspIHtcbiAgICAgIFxuICAgIH1cbiAgfVxuXG4gIGZ1bmN0aW9uIHVwZGF0ZUVudGl0aWVzKCkge1xuICAgIGZvcih2YXIgaSA9IDA7IGkgPCBlbnRpdGllcy5sZW5ndGg7IGkrKykge1xuICAgICAgXG4gICAgfVxuICB9XG4gIFxuICByZXR1cm4ge1xuICAgIGluaXQ6IGluaXQsXG4gICAgZnVsbHNjcmVlbjogZnVsbHNjcmVlbixcbiAgICBsb2FkTWFwOiBsb2FkTWFwLFxuICAgIHNwYXduRW50aXR5OiBzcGF3bkVudGl0eSxcbiAgICBzcGF3blJlc291cmNlOiBzcGF3blJlc291cmNlXG4gIH1cbn0pKCk7XG4iLCJ2YXIgZW5naW5lID0gcmVxdWlyZSgnLi9lbmdpbmUnKVxuICAsIG1hcCA9IHJlcXVpcmUoJy4vbWFwJylcbiAgLCBSZXNvdXJjZSA9IHJlcXVpcmUoJy4vUmVzb3VyY2UnKTtcblxudmFyIFRyZWUgPSBuZXcgUmVzb3VyY2Uoe1xuICBzcHJpdGU6ICd0cmVlJyxcbiAgaDogMjAsXG4gIHc6IDIwXG59KTtcblxudmFyIHQgPSBuZXcgVHJlZSh7IHg6MjAsIHk6MjAgfSk7XG5lbmdpbmUuc3Bhd25SZXNvdXJjZSh0KTtcblxuZW5naW5lLmxvYWRNYXAobWFwLnJhbmRvbSgxNTAsIDE1MCkpO1xud2luZG93LmFkZEV2ZW50TGlzdGVuZXIoJ2xvYWQnLCBlbmdpbmUuaW5pdCk7XG53aW5kb3cuYWRkRXZlbnRMaXN0ZW5lcigncmVzaXplJywgZW5naW5lLmZ1bGxzY3JlZW4pO1xuIiwiLy8gSSBESUQgTk9UIFdSSVRFIFRISVMgLSBEYW4gUHJpbmNlIC8vXG5cbnZhciBwID0gNTtcblxubW9kdWxlLmV4cG9ydHMgPSBmdW5jdGlvbih3LCBoKSB7XG4gIHZhciBub2lzZUFyciA9IG5ldyBBcnJheSgpO1xuICBcbiAgZm9yIChpID0gMDsgaSA8PSBwOyBpKyspIHtcbiAgICBub2lzZUFycltpXSA9IG5ldyBBcnJheSgpO1xuXG4gICAgZm9yIChqID0gMDsgaiA8PSBwOyBqKyspIHtcbiAgICAgIHZhciBoZWlnaHQgPSBNYXRoLnJhbmRvbSgpO1xuXG4gICAgICBpZiAoaSA9PSAwIHx8IGogPT0gMCB8fCBpID09IHAgfHwgaiA9PSBwKVxuICAgICAgICBoZWlnaHQgPSAxO1xuXG4gICAgICBub2lzZUFycltpXVtqXSA9IGhlaWdodDtcbiAgICB9XG4gIH1cblxuICByZXR1cm4gKGZsYXR0ZW4oaW50ZXJwb2xhdGUobm9pc2VBcnIsIHcsIGgpKSk7XG59XG5cbmZ1bmN0aW9uIGludGVycG9sYXRlKHBvaW50cywgdywgaCkge1xuICB2YXIgbm9pc2VBcnIgPSBuZXcgQXJyYXkoKVxuICB2YXIgeCA9IDA7XG4gIHZhciB5ID0gMDtcbiAgdmFyIG4gPSB3L3A7XG4gIHZhciBtID0gaC9wO1xuXG4gIGZvciAoaSA9IDA7IGkgPCB3OyBpKyspIHtcbiAgICBpZiAoaSAhPSAwICYmIGkgJSBuID09IDApXG4gICAgICB4Kys7XG5cbiAgICBub2lzZUFycltpXSA9IG5ldyBBcnJheSgpO1xuICAgIGZvciAoaiA9IDA7IGogPCBoOyBqKyspIHtcblxuICAgICAgaWYgKGogIT0gMCAmJiBqICUgbSA9PSAwKVxuICAgICAgICB5Kys7XG5cbiAgICAgIHZhciBtdV94ID0gKGkgJSBuKSAvIG47XG4gICAgICB2YXIgbXVfMiA9ICgxIC0gTWF0aC5jb3MobXVfeCAqIE1hdGguUEkpKSAvIDI7XG5cbiAgICAgIHZhciBpbnRfeDEgPSBwb2ludHNbeF1beV0gKiAoMSAtIG11XzIpICsgcG9pbnRzW3ggKyAxXVt5XSAqIG11XzI7XG4gICAgICB2YXIgaW50X3gyID0gcG9pbnRzW3hdW3kgKyAxXSAqICgxIC0gbXVfMikgKyBwb2ludHNbeCArIDFdW3kgKyAxXSAqIG11XzI7XG5cbiAgICAgIHZhciBtdV95ID0gKGogJSBtKSAvIG07XG4gICAgICB2YXIgbXVfMiA9ICgxIC0gTWF0aC5jb3MobXVfeSAqIE1hdGguUEkpKSAvIDI7XG4gICAgICB2YXIgaW50X3kgPSBpbnRfeDEgKiAoMSAtIG11XzIpICsgaW50X3gyICogbXVfMjtcblxuICAgICAgbm9pc2VBcnJbaV1bal0gPSBpbnRfeTtcbiAgICB9XG4gICAgeSA9IDA7XG4gIH1cbiAgcmV0dXJuIChub2lzZUFycik7XG59XG5cbmZ1bmN0aW9uIGZsYXR0ZW4ocG9pbnRzKSB7XG4gIHZhciBub2lzZUFyciA9IG5ldyBBcnJheSgpXG4gIGZvciAoaSA9IDA7IGkgPCBwb2ludHMubGVuZ3RoOyBpKyspIHtcbiAgICBub2lzZUFycltpXSA9IG5ldyBBcnJheSgpXG4gICAgZm9yIChqID0gMDsgaiA8IHBvaW50c1tpXS5sZW5ndGg7IGorKykge1xuICAgICAgLypcbiAgICAgIGlmIChwb2ludHNbaV1bal0gPCAwLjIpXG4gICAgICAgIG5vaXNlQXJyW2ldW2pdID0gMDtcblxuICAgICAgZWxzZSBpZiAocG9pbnRzW2ldW2pdIDwgMC40KVxuICAgICAgICBub2lzZUFycltpXVtqXSA9IDAuMjtcblxuICAgICAgZWxzZSBpZiAocG9pbnRzW2ldW2pdIDwgMC42KVxuICAgICAgICBub2lzZUFycltpXVtqXSA9IDAuNDtcblxuICAgICAgZWxzZSBpZiAocG9pbnRzW2ldW2pdIDwgMC44KVxuICAgICAgICBub2lzZUFycltpXVtqXSA9IDAuNjtcblxuICAgICAgZWxzZVxuICAgICAgICBub2lzZUFycltpXVtqXSA9IDE7Ki9cbiAgICAgIG5vaXNlQXJyW2ldW2pdID0gMSAtIHBvaW50c1tpXVtqXTtcbiAgICB9XG4gIH1cblxuICByZXR1cm4gKG5vaXNlQXJyKTtcbn1cbiIsInZhciBoZWlnaHRtYXAgPSByZXF1aXJlKCcuL2hlaWdodG1hcCcpO1xuXG5cbm1vZHVsZS5leHBvcnRzID0gKGZ1bmN0aW9uKCkge1xuICBcbiAgLy8gIyByYW5kb21cbiAgLy8gR2VuZXJhdGVzIGEgbWFwIG9mIHdpdGggZGltZW5zaW9uc1xuICAvLyBzcGVjaWZpZWQgYXMgYXJndW1lbnRzLlxuICBmdW5jdGlvbiByYW5kb20odywgaCkgeyBcbiAgICByZXR1cm4gaGVpZ2h0bWFwKHcsIGgpO1xuICB9XG5cbiAgLy8gIyBmbGF0XG4gIC8vIEdlbmVyYXRlcyBhIG1hcCB3aXRoIGRpbWVuc2lvbnNcbiAgLy8gc3BlY2lmaWVkIGFzIGFyZ3VtZW50IGFuZCBjb25zdGFudFxuICAvLyBoZWlnaHQgc3BlY2lmaWVkIGJ5IGhlaWdodC5cbiAgZnVuY3Rpb24gZmxhdCh3LCBoLCBoZWlnaHQpIHtcbiAgICByZXR1cm4gZmlsbCh3LCBoLCBmdW5jdGlvbigpIHtcbiAgICAgIHJldHVybiBoZWlnaHQ7XG4gICAgfSk7XG4gIH1cblxuICAvLyAjIGZpbGxcbiAgLy8gRmlsbHMgYSBtYXAgb2YgZGltZW5zaW9uc1xuICAvLyBzcGVjaWZpZWQgYnkgcGFyYW1ldGVycy5cbiAgZnVuY3Rpb24gZmlsbCh3LCBoLCBmaWxsRm4pIHtcbiAgICB2YXIgeCwgeSwgbWFwID0gW107XG4gICAgZm9yKHggPSAwOyB4IDwgdzsgeCsrKSB7XG4gICAgICBtYXBbeF0gPSBbXTtcbiAgICAgIGZvcih5ID0gMDsgeSA8IGg7IHkrKykge1xuICAgICAgICBtYXBbeF1beV0gPSBmaWxsRm4oeCwgeSk7XG4gICAgICB9XG4gICAgfVxuICAgIHJldHVybiBtYXA7XG4gIH1cbiAgXG4gIHJldHVybiB7XG4gICAgcmFuZG9tOiByYW5kb20sXG4gICAgZmxhdDogZmxhdCxcbiAgICBmaWxsOiBmaWxsXG4gIH1cbn0pKCk7XG4iLCJ2YXIgdGlsZXMgPSByZXF1aXJlKCcuL3RpbGVzLmpzb24nKTtcblxubW9kdWxlLmV4cG9ydHMgPSAoZnVuY3Rpb24oKSB7XG4gIHZhciBjYWNoZSwgdHlwZTtcbiBcbiAgY2FjaGUgPSB7fTtcbiBcbiAgZm9yKHR5cGUgaW4gdGlsZXMpIHtcbiAgICBjYWNoZVt0eXBlXSA9IG5ldyBJbWFnZSgpO1xuICAgIGNhY2hlW3R5cGVdLnNyYyA9ICdhc3NldHMvJyArIHRpbGVzW3R5cGVdO1xuICB9XG4gIFxuICByZXR1cm4gY2FjaGVcbn0pKCk7XG4iLCJtb2R1bGUuZXhwb3J0cz17XG4gIFwid2F0ZXJcIjogXCJmbG9vci5wbmdcIixcbiAgXCJncmFzc1wiOiBcImdyYXNzLnBuZ1wiLFxuICBcInNhbmRcIjogXCJzYW5kLnBuZ1wiLFxuICBcInNub3dcIjogXCJzbm93LnBuZ1wiLFxuICBcIndhdGVyXCI6IFwid2F0ZXIucG5nXCIsXG4gIFwic3RvbmVcIjogXCJzdG9uZS5wbmdcIlxufVxuIl19

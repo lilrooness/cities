@@ -10,6 +10,9 @@ module.exports = function(grunt) {
         files: {
           'bin/game.js': ['src/game.js']
         }
+      },
+      options: {
+        debug: true
       }
     }
   });

@@ -1,22 +1,42 @@
-var noise = require('./noise');
+var heightmap = require('./heightmap');
 
-module.exports = function() {
-  var map;
+
+module.exports = (function() {
   
-  function random() { 
-    noise.seed(Math.random());
-     
+  // # random
+  // Generates a map of with dimensions
+  // specified as arguments.
+  function random(w, h) { 
+    return heightmap(w, h);
   }
 
-  function fill() {
-    map = [];
-    for(var x = 0; x < 100; x++) {
+  // # flat
+  // Generates a map with dimensions
+  // specified as argument and constant
+  // height specified by height.
+  function flat(w, h, height) {
+    return fill(w, h, function() {
+      return height;
+    });
+  }
+
+  // # fill
+  // Fills a map of dimensions
+  // specified by parameters.
+  function fill(w, h, fillFn) {
+    var x, y, map = [];
+    for(x = 0; x < w; x++) {
       map[x] = [];
-      for(var y = 0; y < 100; y++) {
-        map[x][y] = noise.simplex2(x, y);
+      for(y = 0; y < h; y++) {
+        map[x][y] = fillFn(x, y);
       }
-    } 
+    }
+    return map;
   }
   
-  return map;
-}
+  return {
+    random: random,
+    flat: flat,
+    fill: fill
+  }
+})();
